@@ -44,7 +44,7 @@ class AppGUI:
         self.notebook.add(self.tab1, text='Main')
 
         # audio input selection
-        audio_input_label = tk.Label(self.tab1, text="Microfone:")
+        audio_input_label = tk.Label(self.tab1, text="Input:")
         audio_input_label.grid(row=0, column=0, padx=5, pady=5)
 
         # dropdown for audio input
@@ -57,20 +57,20 @@ class AppGUI:
             self.audio_input_dropdown.selected_option.set(self.default_device_name)
 
         # start/stop capture button
-        self.capture_button = tk.Button(self.tab1, text="Iniciar\nConsulta", command=self.toggle_capture)
+        self.capture_button = tk.Button(self.tab1, text="Start\nConsultation", command=self.toggle_capture)
         self.capture_button.grid(row=0, column=4, padx=20, pady=20, columnspan=3, rowspan=2, ipadx=20, ipady=20)
 
         # transcribed text label
-        label_textbox_left = tk.Label(self.tab1, text="Transcrição da Consulta:", justify='left')
+        label_textbox_left = tk.Label(self.tab1, text="Consultation Transcription:", justify='left')
         label_textbox_left.grid(row=2, column=0, padx=5, pady=5)
         
-        label_textbox_right = tk.Label(self.tab1, text="Resumo do atendimento:", justify='left')
+        label_textbox_right = tk.Label(self.tab1, text="Appointment Summary:", justify='left')
         label_textbox_right.grid(row=2, column=4, padx=0, pady=0)
 
-        label_textbox_right2 = tk.Label(self.tab1, text="Sintomas Relatados:", justify='left')
+        label_textbox_right2 = tk.Label(self.tab1, text="Reported Symptoms:", justify='left')
         label_textbox_right2.grid(row=4, column=4, padx=0, pady=0)
 
-        label_textbox_right3 = tk.Label(self.tab1, text="Possíveis Diagnósticos:", justify='left')
+        label_textbox_right3 = tk.Label(self.tab1, text="Possible Diagnoses:", justify='left')
         label_textbox_right3.grid(row=6, column=4, padx=0, pady=0)
 
         # LEFT text box
@@ -133,7 +133,7 @@ class AppGUI:
         self.capture_button.config(text="Start Consultation")
         if file_name is None:
             return
-        # file_name = "consulta_simulada_GiovannaSchmidt.mp3" # TEST: use test audio
+        file_name = "oet-speaking-sample-role-play-medicine.mp3" # TEST: use test audio
         # transcription = self.audio_transcriber.transcribe(file_name, language='pt-BR')
         transcription = self.audio_transcriber.transcribe(file_name, language='en')
         # transcription = test_transcription # TEST: use test transcription
