@@ -118,57 +118,59 @@ class AppGUI:
         print("starting audio recording...")
         # # get selected
         device_info = self.device_map[self.audio_input_dropdown.selected_option.get()]
+        source_rate = int(device_info['defaultSampleRate'])
         if device_info == None:
             print("no audio input device selected")
             return
         device_id = device_info['index']
         print('device_id', device_id)
-        self.audio_recorder.start(device_id, 48000, file_name="consulta_audio.wav")
-        self.capture_button.config(text="Parar e\nGerar Relatório")
+        self.audio_recorder.start(device_id, source_rate, file_name="consultation_audio.wav")
+        self.capture_button.config(text="Stop and\nGenerate Report")
 
     def stop_audio_recording(self):
         print("stopping audio recording...")
         file_name = self.audio_recorder.stop()
-        self.capture_button.config(text="Iniciar Consulta")
+        self.capture_button.config(text="Start Consultation")
         if file_name is None:
             return
         # file_name = "consulta_simulada_GiovannaSchmidt.mp3" # TEST: use test audio
-        transcription = self.audio_transcriber.transcribe(file_name, language='pt-BR')
+        # transcription = self.audio_transcriber.transcribe(file_name, language='pt-BR')
+        transcription = self.audio_transcriber.transcribe(file_name, language='en')
         # transcription = test_transcription # TEST: use test transcription
         if transcription is None:
             return
         self.update_log(transcription)
         
-        self.update_ui_with_resume("processando...")
-        self.update_ui_with_symptoms("processando...")
-        self.update_ui_with_diagnostics("processando...")
+        self.update_ui_with_resume("processing...")
+        self.update_ui_with_symptoms("processing...")
+        self.update_ui_with_diagnostics("processing...")
 
         print("sending resume query...")
         messages = [
-            {'role': 'system', 'content': ('Haja como um assistente médico que possui o objetivo de resumir consultas médicas. '
-                                           'Essas consultas estão no formato de transcrições, geradas a partir de gravações de áudio que podem conter erros de captação. '
-                                           'O assistente médico deve ser capaz de resumir a transcrição da consulta em um texto curto e objetivo, mantendo as informações mais importantes. '
-                                           'Não explique ou faça nenhum comentário. Escreva apenas o resumo da consulta e nada mais.')},
+            {'role': 'system', 'content': ("Act as a medical assistant whose goal is to summarize medical consultations. "
+                                           "These consultations are in the form of transcripts, generated from audio recordings that may contain capture errors. "
+                                           "The medical assistant must be able to summarize the transcript of the consultation in a short and objective text, keeping the most important information. "
+                                           "Do not explain or make any comments. Write only the summary of the consultation and nothing more.")},
             {'role': 'user', 'content': transcription}
         ]
         asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_resume_callback), self.asyncio_loop)
     
         print("sending symptoms query...")
         messages = [
-            {'role': 'system', 'content': ('Haja como um assistente médico que possui o objetivo de listar todos os sintomas reportados pelo paciente em uma consulta médicas. '
-                                           'Essas consultas estão no formato de transcrições, geradas a partir de gravações de áudio que podem conter erros de captação. '
-                                           'O assistente médico deve ser capaz de reunir todos os sintomas reportados, por ordem de importância médica, em uma lista simples e objetiva. '
-                                           'Não explique ou faça nenhum comentário. Escreva apenas a lista e nada mais.')},
+            {'role': 'system', 'content': ("Act as a medical assistant whose objective is to list all the symptoms reported by the patient during a medical consultation. "
+                                           "These consultations are in the form of transcriptions, generated from audio recordings that may contain capture errors. "
+                                           "The medical assistant must be capable of gathering all reported symptoms, in order of medical importance, into a simple and objective list. "
+                                           "Do not explain or make any comments. Write only the list and nothing more.")},
             {'role': 'user', 'content': transcription}
         ]
         asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_symptoms_callback), self.asyncio_loop)
         
         print("sending diagnostics query...")
         messages = [
-            {'role': 'system', 'content': ('Haja como um assistente médico que possui o objetivo de listar todos os possíveis diagnósticos de um paciente em uma consulta médicas. '
-                                           'Essas consultas estão no formato de transcrições, geradas a partir de gravações de áudio que podem conter erros de captação. '
-                                           'O assistente médico deve ser capaz de reunir todos os possíveis diagnósticos, por ordem de importância médica, em uma lista simples e objetiva. '
-                                           'Não explique ou faça nenhum comentário. Apenas liste os diagnósticos com uma breve descrição do motivo.')},
+            {'role': 'system', 'content': ("Act as a medical assistant whose objective is to list all possible diagnoses of a patient in a medical consultation. "
+                                           "These consultations are in the form of transcripts, generated from audio recordings that may contain capture errors. "
+                                           "The medical assistant must be able to gather all possible diagnoses, in order of medical importance, in a simple and objective list. "
+                                           "Do not explain or make any comments. Just list the diagnoses with a brief description of the reason.")},
             {'role': 'user', 'content': transcription}
         ]
         asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_diagnostics_callback), self.asyncio_loop)
