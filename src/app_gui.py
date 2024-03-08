@@ -15,6 +15,7 @@ class AppGUI:
         self.terminate_event = terminate_event
         self.audio_input_dropdown = None
         self.device_map = {}
+        self.capture_button = None
 
         # create the main window
         self.root = tk.Tk() 
@@ -130,7 +131,8 @@ class AppGUI:
     def stop_audio_recording(self):
         print("stopping audio recording...")
         file_name = self.audio_recorder.stop()
-        self.capture_button.config(text="Start Consultation")
+        if self.capture_button:
+            self.capture_button.config(text="Start\nConsultation")
         if file_name is None:
             return
         file_name = "oet-speaking-sample-role-play-medicine.mp3" # TEST: use test audio

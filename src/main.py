@@ -43,7 +43,6 @@ async def asyncio_main(terminate_event: EventAsyncio):
         print(f'main routine exception {e}')
         
 def main():
-    print('Hello World')
     p = pyaudio.PyAudio()
     audio_recorder = AudioRecorder(p)
     audio_transcriber = AudioTranscriber(DEEPGRAM_API_KEY)
