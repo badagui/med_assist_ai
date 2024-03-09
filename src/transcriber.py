@@ -59,7 +59,7 @@ class AudioTranscriber:
         # config: DeepgramClientOptions = DeepgramClientOptions(verbose=logging.SPAM)
         self.client = DeepgramClient(api_key=DEEPGRAM_API_KEY)
 
-    def transcribe(self, file_name: str, language: str = "en-US"):
+    def transcribe(self, file_name: str, language: str = "pt-BR"):
         try:
             print('transcribing', file_name)
             with open(file_name, "rb") as file:
@@ -73,7 +73,7 @@ class AudioTranscriber:
             if response and response.results and response.results.channels and response.results.channels[0].alternatives and response.results.channels[0].alternatives[0].transcript:
                 print('valid response!')
                 return response.results.channels[0].alternatives[0].transcript
-            print('INvalid response!')
+            print('Invalid response!')
             return None
         except Exception as e:
             print(f"transcription exception: {e}")

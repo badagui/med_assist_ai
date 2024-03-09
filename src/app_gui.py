@@ -2,24 +2,21 @@ import tkinter as tk
 from tkinter import scrolledtext
 import asyncio
 from tkinter import ttk
-from gpt_controller import GPTController
-from transcriber import AudioRecorder, AudioTranscriber
+from app_controller import AppController
 from test_prompt import test_transcription
+import pyaudio
 
 class AppGUI:
-    def __init__(self, audio_recorder: AudioRecorder, audio_transcriber: AudioTranscriber, gpt_controller: GPTController, asyncio_loop: asyncio.BaseEventLoop, terminate_event: asyncio.Event):
-        self.audio_recorder = audio_recorder
-        self.audio_transcriber = audio_transcriber
-        self.gpt_controller = gpt_controller
-        self.asyncio_loop = asyncio_loop
-        self.terminate_event = terminate_event
+    def __init__(self, app_controller: AppController, p: pyaudio.PyAudio):
+        self.app_controller = app_controller
+        self.p = p
         self.audio_input_dropdown = None
         self.device_map = {}
         self.capture_button = None
 
         # create the main window
         self.root = tk.Tk() 
-        self.root.title("Med Assist AI")
+        self.root.title("Med Assist AI - " + self.app_controller.language)
         self.root.protocol("WM_DELETE_WINDOW", self.close_program)
         self.create_widgets()
 
@@ -27,11 +24,7 @@ class AppGUI:
         self.root.mainloop()
     
     def close_program(self):
-        print("performing cleanup...")
-        
-        # stop asyncio main loop
-        self.asyncio_loop.call_soon_threadsafe(self.terminate_event.set)
-        
+        self.app_controller.stop_app()
         # terminate GUI
         self.root.destroy()
 
@@ -58,20 +51,20 @@ class AppGUI:
             self.audio_input_dropdown.selected_option.set(self.default_device_name)
 
         # start/stop capture button
-        self.capture_button = tk.Button(self.tab1, text="Start\nConsultation", command=self.toggle_capture)
+        self.capture_button = tk.Button(self.tab1, text="Iniciar\nConsulta", command=self.toggle_capture)
         self.capture_button.grid(row=0, column=4, padx=20, pady=20, columnspan=3, rowspan=2, ipadx=20, ipady=20)
 
         # transcribed text label
-        label_textbox_left = tk.Label(self.tab1, text="Consultation Transcription:", justify='left')
+        label_textbox_left = tk.Label(self.tab1, text="Transcrição da Consulta:", justify='left')
         label_textbox_left.grid(row=2, column=0, padx=5, pady=5)
         
-        label_textbox_right = tk.Label(self.tab1, text="Appointment Summary:", justify='left')
+        label_textbox_right = tk.Label(self.tab1, text="Resumo da Consulta:", justify='left')
         label_textbox_right.grid(row=2, column=4, padx=0, pady=0)
 
-        label_textbox_right2 = tk.Label(self.tab1, text="Reported Symptoms:", justify='left')
+        label_textbox_right2 = tk.Label(self.tab1, text="Sintomas Reportados:", justify='left')
         label_textbox_right2.grid(row=4, column=4, padx=0, pady=0)
 
-        label_textbox_right3 = tk.Label(self.tab1, text="Possible Diagnoses:", justify='left')
+        label_textbox_right3 = tk.Label(self.tab1, text="Possíveis Diagnósticos:", justify='left')
         label_textbox_right3.grid(row=6, column=4, padx=0, pady=0)
 
         # LEFT text box
@@ -96,15 +89,14 @@ class AppGUI:
         self.textbox_base_prompt = scrolledtext.ScrolledText(self.tab2, wrap=tk.WORD, height=30, width=100, background='#f0f0f0')
         self.textbox_base_prompt.grid(row=1, column=0, padx=10, pady=10, columnspan=5,  sticky='nsew')
         
-
     def find_devices(self):
         # query and map audio input devices
-        num_devices = self.audio_recorder.p.get_device_count()
-        default_device_index = self.audio_recorder.p.get_default_input_device_info()['index']
+        num_devices = self.p.get_device_count()
+        default_device_index = self.p.get_default_input_device_info()['index']
         self.default_device_name = None
 
         for i in range(num_devices):
-            device_info = self.audio_recorder.p.get_device_info_by_index(i)
+            device_info = self.p.get_device_info_by_index(i)
             # check if input device
             if device_info['maxInputChannels'] > 0:
                 # create device name
@@ -125,108 +117,56 @@ class AppGUI:
             return
         device_id = device_info['index']
         print('device_id', device_id)
-        self.audio_recorder.start(device_id, source_rate, file_name="consultation_audio.wav")
-        self.capture_button.config(text="Stop and\nGenerate Report")
+        self.app_controller.start_audio_recording(device_id, source_rate)
+        self.capture_button.config(text="Parar e\nGerar Relatório")
 
     def stop_audio_recording(self):
-        print("stopping audio recording...")
-        file_name = self.audio_recorder.stop()
         if self.capture_button:
-            self.capture_button.config(text="Start\nConsultation")
-        if file_name is None:
+            self.capture_button.config(text="Iniciar\nConsulta")
+        if self.app_controller.audio_recorder.stream is None:
             return
-        file_name = "oet-speaking-sample-role-play-medicine.mp3" # TEST: use test audio
-        # transcription = self.audio_transcriber.transcribe(file_name, language='pt-BR')
-        transcription = self.audio_transcriber.transcribe(file_name, language='en')
-        # transcription = test_transcription # TEST: use test transcription
+        # generate transcription
+        self.tsafe_update_transcription('processing...')
+        transcription = self.app_controller.stop_audio_recording_and_transcribe()
         if transcription is None:
+            self.tsafe_update_transcription('error processing audio')
             return
-        self.update_log(transcription)
-        
-        self.update_ui_with_resume("processing...")
-        self.update_ui_with_symptoms("processing...")
-        self.update_ui_with_diagnostics("processing...")
+        self.tsafe_update_transcription(transcription)
+        # generate other data
+        self.tsafe_update_summary("processing...")
+        self.tsafe_update_symptoms("processing...")
+        self.tsafe_update_diagnostics("processing...")
+        self.app_controller.process_transcription_async(transcription, self.tsafe_update_summary, self.tsafe_update_symptoms, self.tsafe_update_diagnostics)
 
-        print("sending resume query...")
-        messages = [
-            {'role': 'system', 'content': ("Act as a medical assistant whose goal is to summarize medical consultations. "
-                                           "These consultations are in the form of transcripts, generated from audio recordings that may contain capture errors. "
-                                           "The medical assistant must be able to summarize the transcript of the consultation in a short and objective text, keeping the most important information. "
-                                           "Do not explain or make any comments. Write only the summary of the consultation and nothing more.")},
-            {'role': 'user', 'content': transcription}
-        ]
-        asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_resume_callback), self.asyncio_loop)
-    
-        print("sending symptoms query...")
-        messages = [
-            {'role': 'system', 'content': ("Act as a medical assistant whose objective is to list all the symptoms reported by the patient during a medical consultation. "
-                                           "These consultations are in the form of transcriptions, generated from audio recordings that may contain capture errors. "
-                                           "The medical assistant must be capable of gathering all reported symptoms, in order of medical importance, into a simple and objective list. "
-                                           "Do not explain or make any comments. Write only the list and nothing more.")},
-            {'role': 'user', 'content': transcription}
-        ]
-        asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_symptoms_callback), self.asyncio_loop)
-        
-        print("sending diagnostics query...")
-        messages = [
-            {'role': 'system', 'content': ("Act as a medical assistant whose objective is to list all possible diagnoses of a patient in a medical consultation. "
-                                           "These consultations are in the form of transcripts, generated from audio recordings that may contain capture errors. "
-                                           "The medical assistant must be able to gather all possible diagnoses, in order of medical importance, in a simple and objective list. "
-                                           "Do not explain or make any comments. Just list the diagnoses with a brief description of the reason.")},
-            {'role': 'user', 'content': transcription}
-        ]
-        asyncio.run_coroutine_threadsafe(self.gpt_controller.send_query(messages, self.set_diagnostics_callback), self.asyncio_loop)
+    def tsafe_update_summary(self, text):
+        def task():
+            self.textbox_right.delete('1.0', tk.END)
+            self.textbox_right.insert(tk.END, text)
+        self.root.after(0, task)
 
-    def set_resume_callback(self, resume_msg):
-        print("setting resume callback...")
-        self.root.after(0, self.update_ui_with_resume, resume_msg.content)
-    def update_ui_with_resume(self, resume):
-        print("updating UI with resume...")
-        self.textbox_right.delete('1.0', tk.END)
-        self.textbox_right.insert(tk.END, resume)
-        self.textbox_right.see(tk.END)
+    def tsafe_update_symptoms(self, text):
+        def task():
+            self.textbox_right2.delete('1.0', tk.END)
+            self.textbox_right2.insert(tk.END, text)
+        self.root.after(0, task)
 
-    def set_symptoms_callback(self, symptoms_msg):
-        print("setting symptoms callback...")
-        self.root.after(0, self.update_ui_with_symptoms, symptoms_msg.content)
-    def update_ui_with_symptoms(self, symptoms):
-        print("updating UI with symptoms...")
-        self.textbox_right2.delete('1.0', tk.END)
-        self.textbox_right2.insert(tk.END, symptoms)
-        self.textbox_right2.see(tk.END)
+    def tsafe_update_diagnostics(self, text):
+        def task():
+            self.textbox_right3.delete('1.0', tk.END)
+            self.textbox_right3.insert(tk.END, text)
+        self.root.after(0, task)
 
-    def set_diagnostics_callback(self, diagnostics_msg):
-        print("setting diagnostics callback...")
-        self.root.after(0, self.update_ui_with_diagnostics, diagnostics_msg.content)
-    def update_ui_with_diagnostics(self, diagnostics):
-        print("updating UI with diagnostics...")
-        self.textbox_right3.delete('1.0', tk.END)
-        self.textbox_right3.insert(tk.END, diagnostics)
-        self.textbox_right3.see(tk.END)
+    def tsafe_update_transcription(self, text):
+        def task():
+            self.textbox_left.delete('1.0', tk.END)
+            self.textbox_left.insert(tk.END, text)
+        self.root.after(0, task)
 
     def toggle_capture(self):
-        print("toggling capture...")
-        if self.audio_recorder.stream == None:
+        if self.app_controller.audio_recorder.stream == None:
             self.start_audio_recording()
         else:
             self.stop_audio_recording()
-
-    def update_log(self, message, color='black'):
-        print (f"updating log with message: {message}")
-        def task():
-            self.textbox_left.insert(tk.END, message)
-            self.textbox_left.see(tk.END)
-        self.root.after(0, task)
-
-    def clear_log(self):
-        self.textbox_left.configure(state='normal')
-        self.textbox_left.delete('1.0', tk.END)
-
-    def fill_results(self, results):
-        # clear guru textbox
-        self.textbox_right.delete('1.0', tk.END)
-        self.textbox_right.insert(tk.END, results)
-        self.textbox_right.see(tk.END)
 
 class DeviceSelectDropdown:
     def __init__(self, master, row, col, device_names, device_changed_callback):

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class GPTController:
+class GPTClient:
     def __init__(self, api_key):
         self.client = AsyncOpenAI(api_key=api_key)
     
@@ -24,7 +24,7 @@ class GPTController:
             print('LLM: usage ', completion.usage)
             print('LLM: in cents ', completion.usage.prompt_tokens * price[0] / 1000 * 100)
             print('LLM: out cents ', completion.usage.completion_tokens * price[1] / 1000 * 100)
-            cback(completion.choices[0].message)
+            cback(completion.choices[0].message.content)
             # return completion.choices[0].message
         except Exception as e:
             print('Exception send query', e)

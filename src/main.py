@@ -2,10 +2,11 @@ import asyncio
 from threading import Thread
 import pyaudio
 import os
+from app_controller import AppController
 from app_gui import AppGUI
 from transcriber import AudioRecorder, AudioTranscriber
 from dotenv import load_dotenv
-from gpt_controller import GPTController
+from gpt_client import GPTClient
 load_dotenv()
 
 DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
@@ -46,7 +47,7 @@ def main():
     p = pyaudio.PyAudio()
     audio_recorder = AudioRecorder(p)
     audio_transcriber = AudioTranscriber(DEEPGRAM_API_KEY)
-    gpt_controller = GPTController(OPENAI_API_KEY)
+    gpt_controller = GPTClient(OPENAI_API_KEY)
     
     terminate_event = EventAsyncio()
     asyncio_loop = asyncio.new_event_loop()
@@ -55,8 +56,10 @@ def main():
     asyncio_thread = Thread(target=start_asyncio_loop, args=(asyncio_loop, terminate_event), daemon=True)
     asyncio_thread.start()
 
+    app_controller = AppController(audio_recorder, audio_transcriber, gpt_controller, asyncio_loop, terminate_event)
+
     # start GUI loop in mainthread
-    app_gui = AppGUI(audio_recorder, audio_transcriber, gpt_controller, asyncio_loop, terminate_event)
+    app_gui = AppGUI(app_controller, p)
     app_gui.run_mainloop()
 
     p.terminate()
